@@ -44,6 +44,6 @@ Herramienta defensiva de reconocimiento pasivo y auditoría de seguridad web. Re
 ### Instalación
 
 ```bash
-git clone https://github.com/Condor2026/circinuswatch.git
+git clone https://github.com/Condor2026/circinuswatch
 cd circinuswatch
 pip install --break-system-packages -r requirements.txt
