@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-CircinusWatch v8.0 — Passive OSINT & Web Security Audit
+CircinusWatch v8.1 — Passive OSINT & Web Security Audit
 Author: Condor2026 | Hardened + Ethical Edition
-
-100% PASIVO. Sin escaneo activo. Sin clasificación de bando.
-Análisis narrativo SIMÉTRICO: cuenta marcadores en todas las direcciones.
 """
 
 import asyncio
@@ -28,7 +25,7 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import quote, urljoin, urlparse
 
 APP_NAME = "CircinusWatch"
-APP_VERSION = "8.0"
+APP_VERSION = "8.1"
 
 try:
     import requests
@@ -99,7 +96,7 @@ def _load_config():
                     os.chmod(CONFIG_FILE, 0o600)
                     print("🔒 config.json tenía permisos abiertos: ajustado a 600")
                 except Exception:
-                    print("⚠ config.json legible por otros usuarios y no pude corregirlo.")
+                    print("⚠ config.json legible por otros usuarios.")
         with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
             cfg = json.load(f)
             if not isinstance(cfg, dict):
@@ -173,9 +170,6 @@ os.makedirs("reports", exist_ok=True)
 os.makedirs("backups", exist_ok=True)
 
 
-# ======================================================================
-# ANÁLISIS NARRATIVO SIMÉTRICO
-# ======================================================================
 _NARRATIVE_LEXICON = {
     "dehumanizacion": [
         r"\bnazi(?:s|sta|stas)?\b", r"\bfascista(?:s)?\b",
@@ -270,9 +264,6 @@ def analyze_narrative_text(text):
     return out
 
 
-# ======================================================================
-# I/O ATÓMICA
-# ======================================================================
 _IO_LOCK = threading.RLock()
 
 
@@ -315,9 +306,6 @@ if not os.path.exists(WATCHLIST_FILE):
     _write_json(WATCHLIST_FILE, {})
 
 
-# ======================================================================
-# VALIDACIÓN Y ANTI-SSRF
-# ======================================================================
 _HOST_LABEL_RE = re.compile(r'^(?!-)[a-z0-9-]{1,63}(?<!-)$')
 GEO_HINT_SUFFIXES = ('.ru', '.su', '.рф', '.xn--p1ai', '.by')
 
@@ -449,9 +437,6 @@ async def _guard(coro, default):
         return d
 
 
-# ======================================================================
-# LOGGER
-# ======================================================================
 class WarLogger:
     def __init__(self):
         dict_files = [BLACKLIST_FILE, WHITELIST_FILE, REPUTATION_DB]
@@ -679,7 +664,7 @@ class CircinusScanner:
         self.mode = "LEXICON_SYMMETRIC"
         console.print("✅ Análisis narrativo simétrico cargado", markup=False)
 
-        self.malware_signatures = [
+        self.suspicious_signatures = [
             {'pattern': r'eval\s*\(\s*(atob|unescape|decodeURI|String\.fromCharCode)',
              'type': 'JS Obfuscación', 'severity': 'Alta', 'desc': 'Ofuscación de código'},
             {'pattern': r'base64_decode', 'type': 'PHP base64_decode',
@@ -731,6 +716,8 @@ class CircinusScanner:
         self.session.headers.update({'User-Agent': random.choice(USER_AGENTS)})
         self.scan_count = 0
         self.reputation_analyzer = ReputationAnalyzer()
+
+    # ---------- funciones de análisis ----------
 
     async def get_whois(self, target):
         host = _extract_host(target) or target
@@ -964,22 +951,30 @@ class CircinusScanner:
                     'recommendation': 'SameSite=None con Secure'})
         return {"cookies": cookies, "vulnerabilities": vulnerabilities}
 
-    async def analyze_malware_signatures(self, page):
+    async def analyze_suspicious_patterns(self, page):
+        """
+        Patrones sospechosos en HTML. Informativo.
+        Umbral: 2 hits mínimo por firma para evitar falsos positivos.
+        Por defecto devuelve lista vacía.
+        """
         content = page.get('content', '')
-        malware, suspicious_links = [], []
+        suspicious, suspicious_links = [], []
         if not content:
-            return {"malware": malware, "suspicious_links": suspicious_links}
-        for sig in self.malware_signatures:
-            per_sig = 0
-            for match in re.finditer(sig['pattern'], content, re.IGNORECASE):
-                start = max(0, match.start() - 50)
-                end = min(len(content), match.end() + 50)
-                context = content[start:end].replace('\n', ' ').replace('\r', '').strip()[:150]
-                malware.append({'type': sig['type'], 'description': sig['desc'],
-                                'severity': sig['severity'], 'context': context})
-                per_sig += 1
-                if per_sig >= 10:
-                    break
+            return {"suspicious_patterns": suspicious, "suspicious_links": suspicious_links}
+
+        MIN_HITS = 2
+        for sig in self.suspicious_signatures:
+            hits = list(re.finditer(sig['pattern'], content, re.IGNORECASE))
+            if len(hits) < MIN_HITS:
+                continue
+            first = hits[0]
+            start = max(0, first.start() - 50)
+            end = min(len(content), first.end() + 50)
+            context = content[start:end].replace('\n', ' ').replace('\r', '').strip()[:150]
+            suspicious.append({'type': sig['type'], 'description': sig['desc'],
+                               'severity': sig['severity'], 'context': context,
+                               'occurrences': len(hits)})
+
         links = re.findall(r'(?:href|src)=["\']([^"\']+)["\']', content, re.IGNORECASE)
         for link in links:
             try:
@@ -991,7 +986,8 @@ class CircinusScanner:
             if any(host.endswith(tld) for tld in self.suspicious_tlds) or \
                any(path.endswith(ext) for ext in ['.exe', '.scr', '.bat', '.apk']):
                 suspicious_links.append(link[:300])
-        return {"malware": malware, "suspicious_links": list(set(suspicious_links))[:20]}
+        return {"suspicious_patterns": suspicious,
+                "suspicious_links": list(set(suspicious_links))[:20]}
 
     async def extract_iocs(self, page):
         content = page.get('content', '')
@@ -1033,7 +1029,7 @@ class CircinusScanner:
         iocs["hashes"] = iocs["hashes"][:10]
         return iocs
 
-    async def map_mitre_attack(self, page, malware_data, vt_data, gsb_data, urlhaus_data):
+    async def map_mitre_attack(self, page, suspicious_data, vt_data, gsb_data, urlhaus_data):
         content = page.get('content', '') if page else ''
         techniques = []
         seen = set()
@@ -1044,7 +1040,7 @@ class CircinusScanner:
                 techniques.append({"id": tech_id, "name": name, "tactic": tactic,
                                    "evidence": evidence[:120]})
 
-        for m in (malware_data or {}).get('malware', []):
+        for m in (suspicious_data or {}).get('suspicious_patterns', []):
             t = m.get('type', '')
             tl = t.lower()
             if 'base64' in tl or 'obfuscaci' in tl or 'ofuscaci' in tl:
@@ -1123,40 +1119,60 @@ class CircinusScanner:
         return techs
 
     async def analyze_virustotal(self, target):
+        """Consulta VT con diagnóstico explícito."""
         if not self.vt_api_key:
-            return {"enabled": False}
+            return {"enabled": False,
+                    "error": "VT_API_KEY no configurada"}
+        host = _api_domain(target)
+        if not host:
+            return {"enabled": True, "ok": False, "error": "Objetivo inválido"}
+        kind = "ip_addresses" if _is_ip(host) else "domains"
+        url = f"https://www.virustotal.com/api/v3/{kind}/{quote(host, safe='')}"
+        console.print(f"🔬 [VT] Consultando {url}", markup=False)
         try:
-            host = _api_domain(target)
-            if not host:
-                return {"enabled": True, "ok": False, "error": "Objetivo inválido"}
             headers = {"x-apikey": self.vt_api_key}
-            kind = "ip_addresses" if _is_ip(host) else "domains"
-            response = requests.get(
-                f"https://www.virustotal.com/api/v3/{kind}/{quote(host, safe='')}",
-                headers=headers, timeout=15)
-            if response.status_code == 401:
-                return {"enabled": True, "ok": False, "error": "API key inválida (401)"}
-            if response.status_code == 429:
-                return {"enabled": True, "ok": False, "error": "Cuota agotada (429)"}
-            if response.status_code == 404:
-                return {"enabled": True, "ok": True, "malicious": 0, "suspicious": 0,
-                        "harmless": 0, "undetected": 0, "reputation": 0,
-                        "flagged_by": [], "not_found": True}
-            if response.status_code != 200:
-                return {"enabled": True, "ok": False, "error": f"HTTP {response.status_code}"}
-            attrs = response.json().get('data', {}).get('attributes', {})
+            r = requests.get(url, headers=headers, timeout=15)
+            console.print(f"🔬 [VT] HTTP {r.status_code}", markup=False)
+            if r.status_code == 401:
+                return {"enabled": True, "ok": False,
+                        "error": "API key inválida (401). Revisa config.json."}
+            if r.status_code == 403:
+                return {"enabled": True, "ok": False,
+                        "error": "Acceso prohibido (403). Key sin permisos."}
+            if r.status_code == 429:
+                return {"enabled": True, "ok": False,
+                        "error": "Cuota agotada (429). Espera 1 minuto."}
+            if r.status_code == 404:
+                return {"enabled": True, "ok": True, "not_found": True,
+                        "malicious": 0, "suspicious": 0, "harmless": 0,
+                        "undetected": 0, "reputation": 0, "flagged_by": []}
+            if r.status_code != 200:
+                return {"enabled": True, "ok": False,
+                        "error": f"HTTP {r.status_code}: {r.text[:120]}"}
+            data = r.json()
+            attrs = data.get('data', {}).get('attributes', {})
             stats = attrs.get('last_analysis_stats', {})
             results = attrs.get('last_analysis_results', {})
-            flagged = sorted([e for e, r in results.items()
-                              if r.get('category') in ('malicious', 'suspicious')])
+            flagged = sorted([e for e, v in results.items()
+                              if v.get('category') in ('malicious', 'suspicious')])
+            malicious = stats.get('malicious', 0)
+            suspicious = stats.get('suspicious', 0)
+            console.print(f"🔬 [VT] malicious={malicious} suspicious={suspicious} "
+                          f"harmless={stats.get('harmless', 0)} "
+                          f"undetected={stats.get('undetected', 0)}", markup=False)
             return {"enabled": True, "ok": True,
-                    "malicious": stats.get('malicious', 0),
-                    "suspicious": stats.get('suspicious', 0),
+                    "malicious": malicious,
+                    "suspicious": suspicious,
                     "harmless": stats.get('harmless', 0),
                     "undetected": stats.get('undetected', 0),
                     "reputation": attrs.get('reputation', 0),
                     "flagged_by": flagged[:15],
                     "categories": list(attrs.get('categories', {}).values())[:5]}
+        except requests.exceptions.Timeout:
+            return {"enabled": True, "ok": False, "error": "Timeout (15s)"}
+        except requests.exceptions.ConnectionError as e:
+            return {"enabled": True, "ok": False,
+                    "error": f"Error de conexión: {_safe_err(e, 80)}"}
         except Exception as e:
             return {"enabled": True, "ok": False,
                     "error": f"{type(e).__name__}: {_safe_err(e, 120)}"}
@@ -1216,15 +1232,15 @@ class CircinusScanner:
                                      "passed": 0, "total": 0})
         cookies_data = await _guard(self.analyze_cookies(page),
                                     {"cookies": [], "vulnerabilities": []})
-        malware_data = await _guard(self.analyze_malware_signatures(page),
-                                    {"malware": [], "suspicious_links": []})
+        suspicious_data = await _guard(self.analyze_suspicious_patterns(page),
+                                       {"suspicious_patterns": [], "suspicious_links": []})
         techs = await _guard(self.detect_technologies(page), [])
         vt_data = await _guard(self.analyze_virustotal(target), {"enabled": True, "ok": False})
         gsb_data = await _guard(self.analyze_google_safe_browsing(target), {"enabled": True, "ok": False})
         urlhaus_data = await _guard(self.analyze_urlhaus(target), {"enabled": True, "ok": False})
         iocs = await _guard(self.extract_iocs(page), {"ips": [], "domains": [],
                                                       "urls": [], "hashes": []})
-        mitre = await _guard(self.map_mitre_attack(page, malware_data, vt_data,
+        mitre = await _guard(self.map_mitre_attack(page, suspicious_data, vt_data,
                                                     gsb_data, urlhaus_data), [])
         c2 = await _guard(self.assess_c2(vt_data, gsb_data, urlhaus_data, iocs),
                           {"score": 0, "level": "SIN EVIDENCIA", "signals": []})
@@ -1260,9 +1276,10 @@ class CircinusScanner:
 
         score = (headers_data['passed'] / headers_data['total'] * 100) \
                 if headers_data['total'] else 100.0
-        high_malware = sum(1 for m in malware_data['malware'] if m['severity'] == 'Alta')
-        medium_malware = sum(1 for m in malware_data['malware'] if m['severity'] == 'Media')
-        score -= (high_malware * 20) + (medium_malware * 10)
+        # Solo patrones de severidad Alta con 2+ ocurrencias penalizan
+        high_suspicious = sum(1 for m in suspicious_data['suspicious_patterns']
+                              if m['severity'] == 'Alta')
+        score -= (high_suspicious * 15)
         high_vuln = sum(1 for v in vulnerabilities if v['severity'] == 'Alta')
         medium_vuln = sum(1 for v in vulnerabilities if v['severity'] == 'Media')
         low_vuln = sum(1 for v in vulnerabilities if v['severity'] == 'Baja')
@@ -1290,8 +1307,8 @@ class CircinusScanner:
                          "truncated": page.get('truncated', False)},
                 "ssl": ssl_data, "security_headers": headers_data['headers'],
                 "cookies": cookies_data['cookies'],
-                "malware": malware_data['malware'],
-                "suspicious_links": malware_data['suspicious_links'],
+                "suspicious_patterns": suspicious_data['suspicious_patterns'],
+                "suspicious_links": suspicious_data['suspicious_links'],
                 "technologies": techs, "virustotal": vt_data,
                 "safe_browsing": gsb_data, "urlhaus": urlhaus_data,
                 "iocs": iocs, "mitre_attack": mitre, "c2_assessment": c2,
@@ -1348,19 +1365,31 @@ class CircinusScanner:
 
     async def check_wayback_machine(self, target):
         d = _api_domain(target)
-        try:
-            resp = requests.get("https://archive.org/wayback/available",
-                                params={"url": d}, timeout=10)
-            data = resp.json()
-            snap = data.get('archived_snapshots', {}).get('closest')
-            if not snap:
-                return {"ok": True, "archived": False}
-            return {"ok": True, "archived": True,
-                    "first_seen_hint": snap.get('timestamp', 'N/A'),
-                    "snapshot_url": snap.get('url', 'N/A'),
-                    "status": snap.get('status', 'N/A')}
-        except Exception as e:
-            return {"ok": False, "error": _safe_err(e, 100)}
+        for attempt in (1, 2):
+            try:
+                resp = requests.get("https://archive.org/wayback/available",
+                                    params={"url": d}, timeout=15)
+                if resp.status_code != 200:
+                    if attempt == 2:
+                        return {"ok": False, "error": f"HTTP {resp.status_code}"}
+                    continue
+                ct = resp.headers.get('Content-Type', '')
+                if 'json' not in ct.lower():
+                    if attempt == 2:
+                        return {"ok": False, "error": "Respuesta no JSON de archive.org"}
+                    continue
+                data = resp.json()
+                snap = data.get('archived_snapshots', {}).get('closest')
+                if not snap:
+                    return {"ok": True, "archived": False}
+                return {"ok": True, "archived": True,
+                        "first_seen_hint": snap.get('timestamp', 'N/A'),
+                        "snapshot_url": snap.get('url', 'N/A'),
+                        "status": snap.get('status', 'N/A')}
+            except Exception as e:
+                if attempt == 2:
+                    return {"ok": False, "error": _safe_err(e, 100)}
+        return {"ok": False, "error": "Wayback no disponible"}
 
     async def analyze_dns_extended(self, domain):
         d = _api_domain(domain)
@@ -1573,7 +1602,7 @@ class CircinusScanner:
                 f"({web_security.get('risk_score', 0)}/100)")
         return result
 
-
+    
 def show_banner(scanner):
     console.clear()
     stats = logger.get_stats()
@@ -1719,8 +1748,6 @@ def render_osint_table(target, osint):
 async def scan_target(scanner):
     console.print("\n🎯 ESCANEO INTELIGENTE", markup=False)
     console.print("📝 Ingresa IP, dominio o URL para analizar", markup=False)
-    console.print("💡 Ejemplos: example.com | 8.8.8.8 | https://ejemplo.org", markup=False)
-
     target = Prompt.ask("🌐 Objetivo").strip()
     if not target:
         return
@@ -1788,14 +1815,6 @@ async def scan_target(scanner):
         f"{EMOJIS['scan']} Escaneo completado. Riesgo técnico: {attack['risk_level']} | "
         f"Score: {attack['risk_score']}/100 | Web: {web_security.get('risk_level', 'N/A')}")
 
-    if attack['risk_level'] == "CRITICO" or web_security.get('risk_level') == "CRÍTICO":
-        await scanner.send_telegram_alert(
-            f"🚨 {APP_NAME} — ALERTA CRÍTICA\n"
-            f"Objetivo: {target}\n"
-            f"Riesgo técnico: {attack['risk_level']} ({attack['risk_score']}/100)\n"
-            f"Web security: {web_security.get('risk_level', 'N/A')} "
-            f"({web_security.get('risk_score', 0)}/100)")
-
     table = Table(title=f"📊 RESULTADOS PARA {target.upper()}",
                   box=box.DOUBLE_EDGE, title_style="bold cyan")
     table.add_column("📌 Métrica", style="bold yellow", width=22)
@@ -1807,7 +1826,6 @@ async def scan_target(scanner):
     table.add_row("🖥 IP", geo_data.get("ip", "N/A"))
     table.add_row("📅 Fecha creación", whois_data.get("creation_date", "N/A"))
     table.add_row("📋 Registrador", whois_data.get("registrar", "N/A"))
-
     table.add_row("🗣 Marcadores narrativos", str(narrative_data.get('total_markers', 0)))
     table.add_row("🗣 Intensidad de encuadre", f"{narrative_data.get('framing_intensity', 0):.2f}")
     cats = narrative_data.get('categories', {})
@@ -1894,12 +1912,13 @@ async def scan_target(scanner):
     cookies = web_security.get('cookies', [])
     ws_table.add_row("🍪 Cookies", f"{len(cookies)} encontradas" if cookies else "Ninguna")
 
-    malware = web_security.get('malware', [])
-    if malware:
-        tipos = ", ".join(sorted(set(m['type'] for m in malware)))
-        ws_table.add_row("🦠 Malware", f"⚠ {len(malware)} firmas: {tipos}"[:250])
+    suspicious = web_security.get('suspicious_patterns', [])
+    if suspicious:
+        tipos = ", ".join(sorted(set(m['type'] for m in suspicious)))
+        ws_table.add_row("🔎 Patrones sospechosos",
+                         f"⚠ {len(suspicious)}: {tipos}"[:250])
     else:
-        ws_table.add_row("🦠 Malware", "✅ No detectado")
+        ws_table.add_row("🔎 Patrones sospechosos", "0 (ninguno relevante)")
 
     techs = web_security.get('technologies', [])
     ws_table.add_row("🛠 Tecnologías", ", ".join(techs) if techs else "No detectadas")
@@ -1919,7 +1938,8 @@ async def scan_target(scanner):
         else:
             ws_table.add_row("🔬 VirusTotal", f"⚠ {vt.get('error', 'N/A')}")
     else:
-        ws_table.add_row("🔬 VirusTotal", "Deshabilitado (falta VT_API_KEY)")
+        ws_table.add_row("🔬 VirusTotal",
+                         f"Deshabilitado: {vt.get('error', 'falta VT_API_KEY')}")
 
     gsb = web_security.get('safe_browsing', {})
     if gsb.get('enabled'):
@@ -2131,7 +2151,7 @@ def start_dashboard():
         HTML = """
 <!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta http-equiv="refresh" content="30">
-<title>CircinusWatch v8.0 - Dashboard</title><style>
+<title>CircinusWatch v8.1 - Dashboard</title><style>
 body { background:#0a0a0a; color:#00ff41; font-family:'Courier New', monospace; padding:20px; }
 h1 { color:#ff0000; text-align:center; border-bottom:2px solid #ff0000; padding-bottom:10px; }
 .metrics { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:15px; margin:20px 0; }
@@ -2141,7 +2161,7 @@ h1 { color:#ff0000; text-align:center; border-bottom:2px solid #ff0000; padding-
 table { width:100%; border-collapse:collapse; margin-top:20px; }
 th, td { padding:8px; border-bottom:1px solid #222; text-align:left; } th { color:#ff4444; }
 </style></head><body>
-<h1>🌀 CIRCINUSWATCH v8.0</h1>
+<h1>🌀 CIRCINUSWATCH v8.1</h1>
 <p style="text-align:center;">{{ now }} | 🟢 Sistema Activo | ⚖️ 100% Pasivo</p>
 <div class="metrics">
 <div class="metric"><div>💀 Críticas</div><div class="value critical">{{ stats.critical }}</div></div>
@@ -2227,7 +2247,6 @@ def manage_lists(scanner):
         console.print("  5. ❌ Eliminar de lista negra", markup=False)
         console.print("  6. ❌ Eliminar de lista blanca", markup=False)
         console.print("  7. 🔙 Volver", markup=False)
-        console.print("  ℹ Lista blanca: dominio exacto, subdominios o comodín.", markup=False)
         choice = Prompt.ask("📌 Opción", choices=["1", "2", "3", "4", "5", "6", "7"])
         if choice == "7":
             break
@@ -2236,8 +2255,8 @@ def manage_lists(scanner):
             if blacklist:
                 console.print("\n⛔ LISTA NEGRA:", markup=False)
                 for target, info in blacklist.items():
-                    console.print(f"  • {target} - {info.get('reason', 'Sin razón')} "
-                                  f"(agregado: {info.get('added', 'N/A')[:16]})", markup=False)
+                    console.print(f"  • {target} - {info.get('reason', 'Sin razón')}",
+                                  markup=False)
             else:
                 console.print("✅ No hay objetivos en lista negra", markup=False)
             wait_for_enter()
@@ -2246,8 +2265,8 @@ def manage_lists(scanner):
             if whitelist:
                 console.print("\n✅ LISTA BLANCA:", markup=False)
                 for target, info in whitelist.items():
-                    console.print(f"  • {target} - {info.get('reason', 'Sin razón')} "
-                                  f"(agregado: {info.get('added', 'N/A')[:16]})", markup=False)
+                    console.print(f"  • {target} - {info.get('reason', 'Sin razón')}",
+                                  markup=False)
             else:
                 console.print("✅ No hay objetivos en lista blanca", markup=False)
             wait_for_enter()
@@ -2424,8 +2443,6 @@ async def export_stix(scanner):
 
 async def osint_extra_menu(scanner):
     console.print("\n🕵 OSINT EXTRA", markup=False)
-    console.print("📝 Corre solo el OSINT pasivo (crt.sh, favicon, Wayback, DNS, reputación).",
-                  markup=False)
     target = Prompt.ask("🌐 Objetivo").strip()
     if not target:
         return
@@ -2492,15 +2509,11 @@ async def watchlist_menu(scanner):
                 changed = wl.update(t, result['risk_score'], result['risk_level'],
                                     result.get('web_security', {}).get('risk_level', 'N/A'))
                 if changed:
-                    console.print(f"⚠ CAMBIO detectado en {t}: {result['risk_level']} / "
-                                  f"web security "
-                                  f"{result.get('web_security', {}).get('risk_level', 'N/A')}",
+                    console.print(f"⚠ CAMBIO detectado en {t}: {result['risk_level']}",
                                   markup=False)
                     await scanner.send_telegram_alert(
                         f"👁 {APP_NAME} — cambio en vigilancia\nObjetivo: {t}\n"
-                        f"Nuevo riesgo: {result['risk_level']} ({result['risk_score']}/100)\n"
-                        f"Web security: "
-                        f"{result.get('web_security', {}).get('risk_level', 'N/A')}")
+                        f"Nuevo riesgo: {result['risk_level']} ({result['risk_score']}/100)")
                 else:
                     console.print(f"   sin cambios ({result['risk_level']})", markup=False)
                 await asyncio.sleep(2)
@@ -2520,8 +2533,7 @@ async def main():
     )
 
     console.print(Panel(
-        f"🌀 CIRCINUSWATCH v{APP_VERSION} (PASSIVE OSINT + WEB SECURITY AUDIT)\n"
-        "🛡 100% Pasivo. Sin escaneo activo. Análisis narrativo simétrico.\n"
+        f"🌀 CIRCINUSWATCH v{APP_VERSION}\n"
         f"⚡ Modo: {scanner.mode}\n\n"
         f"🔬 VirusTotal: {_mask(scanner.vt_api_key)}\n"
         f"🛡 Safe Browsing: {_mask(scanner.gsb_key)}\n"
@@ -2529,13 +2541,7 @@ async def main():
         f"🚫 AbuseIPDB: {_mask(scanner.abuseipdb_key)}\n"
         f"🌫 GreyNoise: {_mask(scanner.greynoise_key)}\n"
         f"🔭 Shodan: {_mask(scanner.shodan_key)}\n"
-        f"📨 Telegram: {_mask(scanner.telegram_token)}\n\n"
-        f"📁 Config: {os.path.abspath(CONFIG_FILE)}\n"
-        f"⚖️ Puertos: SOLO índice pasivo Shodan (sin escaneo activo)\n"
-        f"🧱 Anti-SSRF: "
-        f"{'DESACTIVADO (CIRCINUS_ALLOW_PRIVATE=1)' if _ALLOW_PRIVATE else 'activo (solo IPs públicas)'}\n"
-        f"📊 {len(logger.get_all_events())} eventos en el sistema\n"
-        f"⚠ {len(logger.get_threats())} amenazas registradas",
+        f"📨 Telegram: {_mask(scanner.telegram_token)}\n",
         border_style="red", title="🔥 SISTEMA INICIADO"), markup=False)
 
     time.sleep(1)
