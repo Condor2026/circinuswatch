@@ -1,6 +1,70 @@
 # 🌀 CircinusWatch v8.0
 ![TheCondor](image.jpg)
 
+<p align="center">
+  <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=24&duration=3000&pause=500&color=00FF41&center=true&vCenter=true&width=750&lines=%F0%9F%8C%80+CIRCINUSWATCH+v8.0;PASSIVE+OSINT+%26+WEB+SECURITY+AUDIT;No+active+scanning+%7C+100%25+passive;Narrative+analysis+%7C+MITRE+ATT%26CK;%22Observe%2C+don%27t+intrude%22" alt="CIRCINUSWATCH" />
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/version-8.0-00ff41?style=for-the-badge&logo=github">
+  <img src="https://img.shields.io/badge/release-stable-brightgreen?style=for-the-badge&logo=github">
+  <img src="https://img.shields.io/badge/build-passing-success?style=for-the-badge&logo=githubactions">
+  <img src="https://img.shields.io/badge/mode-passive-blue?style=for-the-badge&logo=shield">
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/license-MIT-blue?style=for-the-badge&logo=gnu">
+  <img src="https://img.shields.io/badge/open%20source-yes-brightgreen?style=for-the-badge&logo=opensourceinitiative">
+  <img src="https://img.shields.io/badge/ethical%20use-required-red?style=for-the-badge&logo=spider">
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12-blue?style=for-the-badge&logo=python">
+  <img src="https://img.shields.io/badge/rich-console-purple?style=for-the-badge&logo=python">
+  <img src="https://img.shields.io/badge/flask-dashboard-lightblue?style=for-the-badge&logo=flask">
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/platform-windows%20%7C%20macos%20%7C%20linux-lightgrey?style=for-the-badge&logo=linux">
+  <img src="https://img.shields.io/badge/ssrf-protected-red?style=for-the-badge&logo=cloudflare">
+  <img src="https://img.shields.io/badge/redirects-validated-orange?style=for-the-badge&logo=git">
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/modules-15%2B-brightgreen?style=for-the-badge&logo=bookstack">
+  <img src="https://img.shields.io/badge/osint%20sources-crt.sh%20%7C%20wayback%20%7C%20dns-blue?style=for-the-badge&logo=newspaper">
+  <img src="https://img.shields.io/badge/threat%20intel-VT%20%7C%20URLHaus%20%7C%20GSB-orange?style=for-the-badge&logo=virustotal">
+  <img src="https://img.shields.io/badge/mitre-att%26ck-success?style=for-the-badge&logo=target">
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/narrative%20analysis-symmetric-brightgreen?style=for-the-badge&logo=speech-balloon">
+  <img src="https://img.shields.io/badge/geo%20bias-none-blue?style=for-the-badge&logo=globe">
+  <img src="https://img.shields.io/badge/disclaimer-required-yellow?style=for-the-badge&logo=warning">
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/PRs-welcome-brightgreen?style=for-the-badge&logo=github">
+  <img src="https://img.shields.io/badge/maintained-yes-brightgreen?style=for-the-badge&logo=github">
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/caffeine-powered-brown?style=for-the-badge&logo=buymeacoffee">
+  <img src="https://img.shields.io/badge/status-active-success?style=for-the-badge">
+</p>
+
+<p align="center">
+  <img src="https://komarev.com/ghpvc/?username=Condor2026&label=VISITORS&color=00ff41&style=for-the-badge">
+</p>
+
+<p align="center">
+  <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=800&size=34&duration=9999&pause=9999&color=00FF41&center=true&vCenter=true&width=600&lines=%F0%9F%8C%80+CIRCINUSWATCH+v8.0;PASSIVE+OSINT+%26+WEB+SECURITY+AUDIT" alt="CIRCINUSWATCH" />
+</p>
+
+<p align="center">
+  <img src="https://readme-typing-svg.herokuapp.com?font=Fira+Code&size=20&duration=3000&pause=500&color=00FF41&center=true&vCenter=true&width=700&lines=WHOIS+%7C+DNS+%7C+TLS+%7C+Headers+%7C+Cookies;crt.sh+%7C+Wayback+%7C+Favicon+Hash;MITRE+ATT%26CK+%7C+C2+Assessment;Passive+only+%7C+Ethical+by+design">
+</p>
+
 **Passive OSINT & Web Security Audit**
 
 Herramienta defensiva de reconocimiento pasivo y auditoría de seguridad web. Recopila información de fuentes públicas, audita cabeceras/TLS/cookies, extrae IOCs y correlaciona técnicas MITRE ATT&CK — todo sin generar tráfico intrusivo contra el objetivo.
