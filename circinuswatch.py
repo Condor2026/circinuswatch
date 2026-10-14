@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
@@ -74,57 +75,18 @@ MAX_BATCH_TARGETS = 50
 
 _ALLOW_PRIVATE = os.environ.get("CIRCINUS_ALLOW_PRIVATE", "").strip() == "1"
 
-_CONFIG_KEYS = ["VT_API_KEY", "ABUSEIPDB_API_KEY", "GREYNOISE_API_KEY", "SHODAN_API_KEY",
-                "GSB_API_KEY", "URLHAUS_AUTH_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"]
-
-
-def _load_config():
-    default = {k: "" for k in _CONFIG_KEYS}
-    if not os.path.exists(CONFIG_FILE):
-        try:
-            fd = os.open(CONFIG_FILE, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-            with os.fdopen(fd, 'w', encoding='utf-8') as f:
-                json.dump(default, f, indent=2)
-        except Exception:
-            pass
-        return default
-    try:
-        if os.name == 'posix':
-            mode = stat.S_IMODE(os.stat(CONFIG_FILE).st_mode)
-            if mode & 0o077:
-                try:
-                    os.chmod(CONFIG_FILE, 0o600)
-                    print("🔒 config.json tenía permisos abiertos: ajustado a 600")
-                except Exception:
-                    print("⚠ config.json legible por otros usuarios.")
-        with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
-            cfg = json.load(f)
-            if not isinstance(cfg, dict):
-                return default
-            for k in _CONFIG_KEYS:
-                cfg.setdefault(k, "")
-            return cfg
-    except Exception:
-        return default
-
-
-def _get_key(cfg, name):
-    val = os.environ.get(name)
-    if val:
-        return val.strip()
-    val = cfg.get(name)
-    if not isinstance(val, str):
-        return None
-    return val.strip() if val.strip() else None
-
-
-def _mask(key):
-    if not key:
-        return "no detectada"
-    if len(key) >= 16:
-        return f"detectada (…{key[-4:]})"
-    return "detectada"
-
+# ============================================================
+# 🔑 API KEYS — EDITA SOLO ESTA SECCIÓN
+# ============================================================
+VT_API_KEY = "TU_API_KEY"
+ABUSEIPDB_API_KEY = ""
+GREYNOISE_API_KEY = ""
+SHODAN_API_KEY = ""
+GSB_API_KEY = ""
+URLHAUS_AUTH_KEY = ""
+TELEGRAM_BOT_TOKEN = ""
+TELEGRAM_CHAT_ID = ""
+# ============================================================
 
 _SECRETS = set()
 _SECRET_PATTERNS = [
@@ -151,15 +113,6 @@ def _safe_err(e, limit=100):
     return _redact(str(e))[:limit]
 
 
-_config = _load_config()
-VT_API_KEY = _get_key(_config, "VT_API_KEY")
-ABUSEIPDB_API_KEY = _get_key(_config, "ABUSEIPDB_API_KEY")
-GREYNOISE_API_KEY = _get_key(_config, "GREYNOISE_API_KEY")
-SHODAN_API_KEY = _get_key(_config, "SHODAN_API_KEY")
-GSB_API_KEY = _get_key(_config, "GSB_API_KEY")
-URLHAUS_AUTH_KEY = _get_key(_config, "URLHAUS_AUTH_KEY")
-TELEGRAM_BOT_TOKEN = _get_key(_config, "TELEGRAM_BOT_TOKEN")
-TELEGRAM_CHAT_ID = _get_key(_config, "TELEGRAM_CHAT_ID")
 for _k in (VT_API_KEY, ABUSEIPDB_API_KEY, GREYNOISE_API_KEY, SHODAN_API_KEY,
            GSB_API_KEY, URLHAUS_AUTH_KEY, TELEGRAM_BOT_TOKEN):
     _register_secret(_k)
@@ -168,6 +121,14 @@ os.makedirs("logs", exist_ok=True)
 os.makedirs("data", exist_ok=True)
 os.makedirs("reports", exist_ok=True)
 os.makedirs("backups", exist_ok=True)
+
+
+def _mask(key):
+    if not key:
+        return "no detectada"
+    if len(key) >= 16:
+        return f"detectada (…{key[-4:]})"
+    return "detectada"
 
 
 _NARRATIVE_LEXICON = {
@@ -231,8 +192,7 @@ _NARR_LEX, _NARR_DIR = _compile_narrative()
 
 NARRATIVE_DISCLAIMER = (
     "Detecta MARCADORES LINGÜÍSTICOS de encuadre beligerante. "
-    "NO determina veracidad, intención ni bando. Un texto con muchos marcadores "
-    "puede ser periodismo crítico legítimo. Requiere revisión humana."
+    "NO determina veracidad, intención ni bando. Requiere revisión humana."
 )
 
 
@@ -717,8 +677,6 @@ class CircinusScanner:
         self.scan_count = 0
         self.reputation_analyzer = ReputationAnalyzer()
 
-    # ---------- funciones de análisis ----------
-
     async def get_whois(self, target):
         host = _extract_host(target) or target
         try:
@@ -952,16 +910,10 @@ class CircinusScanner:
         return {"cookies": cookies, "vulnerabilities": vulnerabilities}
 
     async def analyze_suspicious_patterns(self, page):
-        """
-        Patrones sospechosos en HTML. Informativo.
-        Umbral: 2 hits mínimo por firma para evitar falsos positivos.
-        Por defecto devuelve lista vacía.
-        """
         content = page.get('content', '')
         suspicious, suspicious_links = [], []
         if not content:
             return {"suspicious_patterns": suspicious, "suspicious_links": suspicious_links}
-
         MIN_HITS = 2
         for sig in self.suspicious_signatures:
             hits = list(re.finditer(sig['pattern'], content, re.IGNORECASE))
@@ -974,7 +926,6 @@ class CircinusScanner:
             suspicious.append({'type': sig['type'], 'description': sig['desc'],
                                'severity': sig['severity'], 'context': context,
                                'occurrences': len(hits)})
-
         links = re.findall(r'(?:href|src)=["\']([^"\']+)["\']', content, re.IGNORECASE)
         for link in links:
             try:
@@ -1119,10 +1070,8 @@ class CircinusScanner:
         return techs
 
     async def analyze_virustotal(self, target):
-        """Consulta VT con diagnóstico explícito."""
         if not self.vt_api_key:
-            return {"enabled": False,
-                    "error": "VT_API_KEY no configurada"}
+            return {"enabled": False, "error": "VT_API_KEY no configurada"}
         host = _api_domain(target)
         if not host:
             return {"enabled": True, "ok": False, "error": "Objetivo inválido"}
@@ -1134,21 +1083,17 @@ class CircinusScanner:
             r = requests.get(url, headers=headers, timeout=15)
             console.print(f"🔬 [VT] HTTP {r.status_code}", markup=False)
             if r.status_code == 401:
-                return {"enabled": True, "ok": False,
-                        "error": "API key inválida (401). Revisa config.json."}
+                return {"enabled": True, "ok": False, "error": "API key inválida (401)"}
             if r.status_code == 403:
-                return {"enabled": True, "ok": False,
-                        "error": "Acceso prohibido (403). Key sin permisos."}
+                return {"enabled": True, "ok": False, "error": "Acceso prohibido (403)"}
             if r.status_code == 429:
-                return {"enabled": True, "ok": False,
-                        "error": "Cuota agotada (429). Espera 1 minuto."}
+                return {"enabled": True, "ok": False, "error": "Cuota agotada (429)"}
             if r.status_code == 404:
                 return {"enabled": True, "ok": True, "not_found": True,
                         "malicious": 0, "suspicious": 0, "harmless": 0,
                         "undetected": 0, "reputation": 0, "flagged_by": []}
             if r.status_code != 200:
-                return {"enabled": True, "ok": False,
-                        "error": f"HTTP {r.status_code}: {r.text[:120]}"}
+                return {"enabled": True, "ok": False, "error": f"HTTP {r.status_code}"}
             data = r.json()
             attrs = data.get('data', {}).get('attributes', {})
             stats = attrs.get('last_analysis_stats', {})
@@ -1172,7 +1117,7 @@ class CircinusScanner:
             return {"enabled": True, "ok": False, "error": "Timeout (15s)"}
         except requests.exceptions.ConnectionError as e:
             return {"enabled": True, "ok": False,
-                    "error": f"Error de conexión: {_safe_err(e, 80)}"}
+                    "error": f"Error conexión: {_safe_err(e, 80)}"}
         except Exception as e:
             return {"enabled": True, "ok": False,
                     "error": f"{type(e).__name__}: {_safe_err(e, 120)}"}
@@ -1214,8 +1159,7 @@ class CircinusScanner:
                     "urls_count": len(data.get("urls", []))}
         except requests.exceptions.HTTPError as e:
             if "401" in str(e):
-                return {"enabled": True, "ok": False,
-                        "error": "URLHaus requiere Auth-Key (URLHAUS_AUTH_KEY)"}
+                return {"enabled": True, "ok": False, "error": "URLHaus requiere Auth-Key"}
             return {"enabled": True, "ok": False, "error": _safe_err(e, 100)}
         except Exception as e:
             return {"enabled": True, "ok": False, "error": _safe_err(e, 100)}
@@ -1276,7 +1220,6 @@ class CircinusScanner:
 
         score = (headers_data['passed'] / headers_data['total'] * 100) \
                 if headers_data['total'] else 100.0
-        # Solo patrones de severidad Alta con 2+ ocurrencias penalizan
         high_suspicious = sum(1 for m in suspicious_data['suspicious_patterns']
                               if m['severity'] == 'Alta')
         score -= (high_suspicious * 15)
@@ -1376,7 +1319,7 @@ class CircinusScanner:
                 ct = resp.headers.get('Content-Type', '')
                 if 'json' not in ct.lower():
                     if attempt == 2:
-                        return {"ok": False, "error": "Respuesta no JSON de archive.org"}
+                        return {"ok": False, "error": "Respuesta no JSON"}
                     continue
                 data = resp.json()
                 snap = data.get('archived_snapshots', {}).get('closest')
@@ -1603,6 +1546,7 @@ class CircinusScanner:
         return result
 
     
+
 def show_banner(scanner):
     console.clear()
     stats = logger.get_stats()
@@ -1646,9 +1590,9 @@ def show_menu():
     menu.add_row("7", "⛔ Gestión de listas", "Blacklist/Whitelist")
     menu.add_row("8", "💾 Backup", "Crear copia de seguridad")
     menu.add_row("9", "📤 Exportar reporte", "Generar informe detallado")
-    menu.add_row("10", "🕵 OSINT extra", "crt.sh, favicon, Wayback, DNS, AbuseIPDB/GreyNoise")
-    menu.add_row("11", "👁 Vigilancia periódica", "Gestionar y correr watchlist de objetivos")
-    menu.add_row("12", "📤 Exportar STIX", "Bundle STIX simplificado del último escaneo")
+    menu.add_row("10", "🕵 OSINT extra", "crt.sh, favicon, Wayback, DNS")
+    menu.add_row("11", "👁 Vigilancia periódica", "Gestionar y correr watchlist")
+    menu.add_row("12", "📤 Exportar STIX", "Bundle STIX del último escaneo")
     menu.add_row("0", "❌ Salir", "Cerrar herramienta")
     console.print(menu, markup=False)
 
@@ -2586,4 +2530,4 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        console.print("\n👋 Interrumpido por el usuario. Hasta pronto.", markup=False)
+        console.print("\n👋 Interrumpido por el usuario. Hasta pronto.", markup=False)        
