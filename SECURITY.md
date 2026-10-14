@@ -13,7 +13,7 @@ Si encuentras una vulnerabilidad de seguridad en CircinusWatch:
 
 1. **NO abras un issue público.**
 2. Envía un correo a: `SpectrumSecIt@proton.me`
-3. O usa [GitHub Security Advisories](https://github.com/Condor2026/Circinus_Watch/security/advisories/new).
+3. O usa [GitHub Security Advisories](https://github.com/Condor2026/circinuswatch/security/advisories/new).
 
 Incluye:
 
