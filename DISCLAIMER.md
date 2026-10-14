@@ -1,53 +1,54 @@
-# Disclaimer
+# Security Policy
 
-**CircinusWatch** es una herramienta de **reconocimiento pasivo** y **auditoría de seguridad web**. Su objetivo es ayudar a investigadores, periodistas, equipos defensivos y curiosos a recopilar información pública.
+## Versiones soportadas
 
-## Qué NO es
+| Versión | Soportada |
+|---|---|
+| 8.x | ✅ |
+| 7.x | ❌ |
 
-- ❌ NO es una herramienta de ataque.
-- ❌ NO realiza escaneo activo de puertos.
-- ❌ NO explota vulnerabilidades.
-- ❌ NO determina veracidad, intención ni "bando" de ningún contenido.
-- ❌ NO sustituye análisis humano.
-- ❌ NO es un veredicto sobre personas, medios o gobiernos.
+## Reportar una vulnerabilidad
 
-## Sobre el análisis narrativo
+Si encuentras una vulnerabilidad de seguridad en CircinusWatch:
 
-El módulo de análisis narrativo detecta **MARCADORES LINGÜÍSTICOS** de encuadre beligerante/emocional. Es **simétrico**: cuenta marcadores en todas las direcciones (prorruso, proucraniano, pro-OTAN, anti-OTAN).
+1. **NO abras un issue público.**
+2. Abre un [GitHub Security Advisory](https://github.com/Condor2026/circinuswatch/security/advisories/new).
 
-Un texto con muchos marcadores puede ser:
+Incluye:
 
-- Propaganda.
-- Periodismo crítico legítimo.
-- Discurso político vehemente.
-- Cita de un tercero que se está criticando.
-- Traducción automática con sesgo.
+- Descripción de la vulnerabilidad.
+- Pasos para reproducirla.
+- Impacto potencial.
+- Versión afectada.
+- Si tienes un fix propuesto, adjúntalo.
 
-**Los resultados son heurísticos y requieren revisión humana.** No uses el análisis narrativo como única fuente para etiquetar un medio, persona o contenido.
+## Tiempo de respuesta
 
-## Separación de métricas
+- **48 h** — acuse de recibo.
+- **7 días** — evaluación inicial.
+- **30 días** — fix o mitigación (si es viable).
 
-- `risk_score` — **técnico**. Basado en cabeceras, TLS, cookies, malware, threat intel.
-- `narrative` — **informativo**. Basado en marcadores lingüísticos. **NO suma al riesgo técnico.**
+## Alcance
 
-## Uso responsable
+Se consideran vulnerabilidades:
 
-No uses esta herramienta para:
+- Bypass del anti-SSRF.
+- Inyección en logs o dashboard.
+- Fuga de API keys en logs/errores.
+- Corrupción de JSON por condiciones de carrera.
+- Ejecución remota de código.
+- XSS en el dashboard.
 
-- 🚫 Acosar, doxxear o etiquetar personas.
-- 🚫 Vigilar a periodistas, activistas o medios.
-- 🚫 Presentar heurísticas como veredictos.
-- 🚫 Ninguna actividad ilegal en tu jurisdicción.
-- 🚫 Automatizar campañas de desinformación o info-war.
+## Fuera de alcance
 
-## Jurisdicción
+- DoS contra el propio usuario (descarga masiva controlada por `MAX_BODY_BYTES`).
+- Falsos positivos del análisis narrativo.
+- Resultados de APIs externas (VirusTotal, Shodan, etc.).
+- Configuraciones inseguras del usuario (ej: `CIRCINUS_ALLOW_PRIVATE=1` en producción).
 
-El uso de herramientas OSINT puede estar regulado en tu país. Es tu responsabilidad conocer y cumplir la legislación aplicable (protección de datos, secreto de comunicaciones, etc.).
+## Buenas prácticas
 
-## Sin garantía
-
-El software se distribuye "tal cual", sin garantías. Los autores no se hacen responsables del uso indebido.
-
-## Reportar vulnerabilidades
-
-Ver [SECURITY.md](SECURITY.md).
+- Guarda `config.json` con permisos `600`.
+- No subas `config.json` a ningún repo.
+- Usa variables de entorno para producción.
+- Mantén `requests`, `flask` y `rich` actualizados.
